@@ -1,0 +1,47 @@
+
+if (Steps(m)==0) && m.globalDynamicProps.doinit % First iteration
+    
+    
+    m = leaf_setproperty( m, 'rectifyverticals', 1 );
+    
+    % Set up names for variant models.  Useful for running multiple models on a cluster.
+    m.userdata.ranges.modelname.range {1} = 'isotropic growth Figure 4B';
+    m.userdata.ranges.modelname.range {2} = 'isotropic growth inhibited at junction Figure 4C';
+    m.userdata.ranges.modelname.range {3} = 'isotropic growth inhibited at sinus Figure 4D';
+    m.userdata.ranges.modelname.range {4} = 'isotropic growth inhibited at sinus and base Figure 4E';
+    m.userdata.ranges.modelname.range {6} = 'anisotropic growth Figure 4F';
+    m.userdata.ranges.modelname.range {7} = 'anisotropic growth inhibited at junction Figure 4G';
+    m.userdata.ranges.modelname.range {8} = 'anisotropic growth inhibited at sinus Figure 4H';
+    m.userdata.ranges.modelname.range {9} = 'anisotropic growth inhibited at sinus and base Figure 4I';
+    m.userdata.ranges.modelname.range {10} = 'growth promoted by med Figure 4K';
+    m.userdata.ranges.modelname.range {11} = 'growth promoted by med and inhibited at junction Figure 4L';
+    m.userdata.ranges.modelname.range {12} = 'growth promoted by med and inhibited at sinus Figure 4M';
+    m.userdata.ranges.modelname.range {13} = 'growth promoted by med and selectively inhibited at sinus Figure 4N';
+    m.userdata.ranges.modelname.index = 9;
+    
+    
+    m.globalProps.timestep=2.5; %each step relates to 2.5 hours in real time
+    
+    % This is the code for creating a grid of cells around the cylinder.
+    % However, it is not necessary to call this on every run, as the
+    % initial mesh has been saved with the cells created.
+    if ~hasNonemptySecondLayer( m )
+        m = leaf_makesecondlayer( m, 'mode', 'cylindergrid', 'relarea', 0.0025 );  % This gives cells stacked 4 high.
+        m = leaf_setproperty( m, 'bioAalpha', 0 );  % Make the cell grid transparent.
+    end
+end
+modelname = m.userdata.ranges.modelname.range{m.userdata.ranges.modelname.index};
+m = leaf_plotoptions( m, 'bioAalpha', 0 );
+
+m.globalProps.timestep=2.5;% CLUSTER
+
+disp(sprintf('\nRunning %s model %s\n',mfilename, modelname));
+
+
+% set colour of polariser gradient arrows
+m=leaf_plotoptions(m,'layeroffset', 0.1); % distance of secondary layer, generally with cells, to the canvas
+m=leaf_plotoptions(m,'gradientoffset', 0.25);%   distance of the polariser gradient arrows from canvas.
+m=leaf_plotoptions(m,'highgradcolor',[0,0,0],'lowgradcolor',[0,0,0]); % set colour of polariser gradient arrows for when polariser gradient is high and also when it is low
+m=leaf_plotoptions(m,'decorscale',1.2); % size of arrow head
+m=leaf_plotoptions(m,'arrowthickness',1.5); % thickness of arrows
+m=leaf_plotoptions(m,'sidegrad','AB'); %polariser gradient will be plotted on both sides

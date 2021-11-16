@@ -1,0 +1,442 @@
+
+
+
+if  realtime == 140
+    
+    % v_theta is the angle around the z axis.  This is for visualisation
+    % purposes and does not model a biological morphogen.
+    v_theta_p = atan2( m.nodes(:,2), m.nodes(:,1) )*(0.5/pi);
+    
+    %specify the base region
+    basenodes = m.nodes(:,3)== min(m.nodes(:,3));
+    topnodes = m.nodes(:,3)== max(m.nodes(:,3));
+    xy = m.nodes(:,[1 2]);
+    radiisq = sum(xy.*xy,2);
+    maxrsq = max(radiisq);
+    
+    id_base_p(basenodes) = 1;
+    id_base_l = id_base_p;
+    m = leaf_fix_vertex( m, 'vertex', basenodes, 'dfs', 'z' );
+    
+    id_bcup_p = id_base_p;
+    
+    % create region to be marked with clones
+    v_flower_p=ones(size(v_flower_p));
+    v_flower_p(basenodes)=0;
+    
+    % Set id_rim to 1 at every node on the distal edge.
+    id_rim_p( topnodes ) = 1 ;
+    id_rim_l = id_rim_p .* id_rim_a;
+    
+    maxlatheight = 0.15;
+    
+    petalborderv_theta = (1:5)*0.2 - 0.5;
+    petalmidv_theta = petalborderv_theta - 0.1;
+    v_thetatol = 0.01; %was 0.01
+    petalbordernodes = false( size(m.nodes,1), 1 );
+    petalmidnodes = false( size(m.nodes,1), 1 );
+    for i=1:length(v_theta_p)
+        th = v_theta_p(i);
+        bth = abs(petalborderv_theta-th);
+        if any( (bth < v_thetatol) | (1-bth < v_thetatol) )
+            petalbordernodes(i) = true;
+        end
+        mth = abs(petalmidv_theta-th);
+        if any( (mth < v_thetatol) | (1-mth < v_thetatol) )
+            petalmidnodes(i) = true;
+        end
+    end
+    id_jun_p(petalbordernodes) = 1;
+    id_med_p(:) = zeros(size(id_med_p));
+    id_med_p(petalmidnodes) = 1;
+    id_jun_l = id_jun_p .* id_jun_a;
+    id_med_l = id_med_p .* id_med_a;
+    
+    lobenodes = m.nodes(:,3) > 0;
+    id_lobe_p(lobenodes) = 1;
+    % the levels of clamped nodes (vertices) cannot change during
+    % simulation
+    m.morphogenclamp(lobenodes,id_lobe_i) = 1;
+    
+    tubenodes = m.nodes(:,3) <= 0;
+    id_tube_p(tubenodes) = 1;
+    % the levels of clamped nodes (vertices) cannot change during
+    % simulation
+    m.morphogenclamp(tubenodes,id_tube_i) = 1;
+    
+    dorsalnodes = m.nodes(:,2) > 0;
+    id_dorsal_p(dorsalnodes) = 1;
+    % the levels of clamped nodes (vertices) cannot change during
+    % simulation
+    m.morphogenclamp(dorsalnodes,id_dorsal_i) = 1;
+    
+    % s_jun is activated by id_jun
+    s_jun_p (:)=0;
+    s_jun_p (:) = 5* id_jun_l;
+    m = leaf_mgen_conductivity( m, 's_jun', 0.00001 );
+    m = leaf_mgen_absorption( m, 's_jun', 0.001 );
+    
+    % s_med is activated by id_jun
+    s_med_p (:)=0;
+    s_med_p (:) = 5*id_med_l;
+    m = leaf_mgen_conductivity( m, 'S_MED', 0.00001 );
+    m = leaf_mgen_absorption( m, 'S_MED', 0.001 );
+    
+    
+end
+
+
+if realtime == 150
+    
+    m = leaf_mgen_conductivity( m, 's_JUN', 0 );
+    m = leaf_mgen_absorption( m, 'S_JUN', 0);
+    m = leaf_mgen_conductivity( m, 'S_MED', 0 );
+    m = leaf_mgen_absorption( m, 'S_MED', 0 );
+    m = leaf_mgen_conductivity( m, 'S_SINUS', 0 );
+    m = leaf_mgen_absorption( m, 'S_SINUS', 0 );
+    
+end
+
+
+
+% Code for specific models.
+switch modelname
+    
+    case {'isotropic growth Figure 4B'}
+        
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            kapar_p(:) = 0.0165;
+            kaper_p(:) = 0.0165;
+            kbpar_p(:) = kapar_p;
+            kbper_p(:) = kaper_p;
+            knor_p(:)  = 0.005;
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        
+    case  'isotropic growth inhibited at junction Figure 4C'   
+      
+        id_jcup_p= id_jun_p;
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            kapar_p(:) = 0.0165...
+                .* inh (100, id_jcup_l);
+            
+            kaper_p(:) = 0.0165...
+                .* inh (100, id_jcup_l);
+            
+            kbpar_p(:) = kapar_p;
+            kbper_p(:) = kaper_p;
+            knor_p(:)  = 0.005;
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        
+    case 'isotropic growth inhibited at sinus Figure 4D' % @@model MODEL1
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+        id_jcup_p = id_jun_l.* inh(1000, id_tube_l);
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.0165...
+                .* inh (100, id_jcup_p);
+            kaper_p(:) = 0.0165...
+                .* inh (100, id_jcup_p); 
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005;  
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        
+    case 'isotropic growth inhibited at sinus and base Figure 4E' % @@model MODEL1
+        
+        % @@GRN Gene Regulatory Network
+     
+          id_jcup_p = id_jun_l.* inh(1000, id_tube_l);
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            kapar_p(:) = 0.0165...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);  
+            kaper_p(:) = 0.0165...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p); 
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p; 
+            knor_p(:)  = 0.005;  
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+
+        
+    case 'anisotropic growth Figure 4F' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350.
+            kapar_p(:) = 0.022;
+            kaper_p(:) = 0.011;
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005;  
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        
+    case 'anisotropic growth inhibited at junction Figure 4G'   % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+       
+        
+         id_jcup_p= id_jun_p;
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...
+                .* inh (100, id_jcup_p);
+             %   .* inh (0.5, id_base_p); %try this
+            kaper_p(:) = 0.011...
+                .* inh (100, id_jcup_p);
+                 %.* inh (0.5, id_base_p);%try this
+            kbpar_p(:) = kapar_p;  % @@ Eqn xx
+            kbper_p(:) = kaper_p;  % @@ Eqn xx
+            knor_p(:)  = 0.01;  % @@ Eqn xx increase from 0.005
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+    case 'anisotropic growth inhibited at sinus Figure 4H'   % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+      
+          id_jcup_p = id_jun_l.* inh(1000, id_tube_l);
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...
+                .* inh (100, id_jcup_p);
+            kaper_p(:) = 0.011...
+                .* inh (100, id_jcup_p);
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005;  
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+    case 'anisotropic growth inhibited at sinus and base Figure 4I' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+        
+         id_jcup_p = id_jun_l.* inh(1000, id_tube_l);
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+            kaper_p(:) = 0.011...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);  
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005; 
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+         case 'growth promoted by med Figure 4K' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+       
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...was 0.011
+                .*pro(0.3, s_med_l)...
+                .* inh (0.5, id_base_p);
+               
+               % .* inh (0.5, id_base_p);
+            kaper_p(:) = 0.011...
+                .*pro(0, s_med_l)...
+                .* inh (0.5, id_base_p);
+                
+                  
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005; %was 0.005
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        case 'growth promoted by med and inhibited at junction Figure 4L' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+         id_jcup_p= id_jun_p;
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...was 0.011
+                .*pro(0.3, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+               
+               % .* inh (0.5, id_base_p);
+            kaper_p(:) = 0.011...
+                .*pro(0, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+                
+                  
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005; %was 0.005
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        case 'growth promoted by med and inhibited at sinus Figure 4M' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+        id_jcup_p = id_jun_l.* inh(1000, id_tube_l);
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...was 0.011
+                .*pro(0.3, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+               
+               % .* inh (0.5, id_base_p);
+            kaper_p(:) = 0.011...
+                .*pro(0, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+                
+                  
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005; %was 0.005
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+        
+
+        
+        case  'growth promoted by med and selectively inhibited at sinus Figure 4N' % @@model MODEL1
+        % @@PRN Polariser Regulatory Network
+        
+        P(id_base_p ==1)=1; %production of polariser at the base of canvas
+        P(id_rim_p==1)=0.1; %degradation of polariser at the edge of the ring of the canvas
+        m.morphogenclamp((id_rim_p==1)|(id_base_p==1),polariser_i) = 1;%stable polariser gradient by clamping the production and degradation of the polariser
+        m = leaf_mgen_conductivity( m, 'Polariser', 0.001);% diffusion constant for polariser
+        m = leaf_mgen_dilution( m, 'Polariser', false );% it will not dilute with growth
+        m = leaf_mgen_absorption( m, 'Polariser', 0.01);  % it will not decay everywhere
+        
+        % @@GRN Gene Regulatory Network
+        % Every equation to be formatted should end with an at-at Eqn N comment.
+        
+        id_jcup_p = id_jun_l.* inh(1000, id_tube_l).*id_dorsal_p;
+        
+        % @@KRN Growth Regulatory Network
+        if realtime == 160 && realtime<350
+            % Every equation to be formatted should end with an at-at Eqn N comment.
+            kapar_p(:) = 0.022...was 0.011
+                .*pro(0.3, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+               
+               % .* inh (0.5, id_base_p);
+            kaper_p(:) = 0.011...
+                .*pro(0, s_med_l)...
+                .* inh (100, id_jcup_p)...
+                .* inh (0.5, id_base_p);
+                
+                  
+            kbpar_p(:) = kapar_p;  
+            kbper_p(:) = kaper_p;  
+            knor_p(:)  = 0.005; %was 0.005
+            v_karea_p = kapar_p +kaper_p;
+            v_kaniso_p =  log (kbpar_p./kbper_p);
+        end
+ otherwise
+        % If this happens, maybe you forgot a model.
+
+end
